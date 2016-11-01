@@ -1,4 +1,4 @@
-from copy import copy
+from copy import deepcopy
 
 
 class Stop(object):
@@ -35,7 +35,6 @@ class Trip(object):
             next_stop = move.start_stop
 
         if self.current_stop.line != next_stop.line:
-            # TODO still not quite right
             self.lines += 1
 
         self.current_stop = next_stop
@@ -44,27 +43,36 @@ class Trip(object):
     def __repr__(self):
         current_stop = self.current_stop
         moves = self.moves.copy()
+        # print(moves)
         moves.reverse()
         steps = []
 
-        for move in moves:
-            if move.end_stop == current_stop:
+        for move in moves[:-1]:
+            if stop_matches_current(move.end_stop, current_stop):
                 prev_stop = move.start_stop
             else:
                 prev_stop = move.end_stop
 
-            if prev_stop.line != current_stop.line:
-                steps.insert(0, "At %r, go to %r." % (prev_stop, current_stop))
+            # if current_stop.line != prev_stop.line:
+            steps.insert(0, "At %r, go to %r." % (prev_stop, current_stop))
 
             current_stop = prev_stop
 
         return ' '.join(steps)
 
 
-def stop_matches_current(stop, current):
-    return stop.station == current.station and (
-        not current.line or stop.line == current.line
+def stop_matches_current(stop, current_top):
+    return stop.station == current_top.station and (
+        not current_top.line or stop.line == current_top.line
     )
+
+
+def can_move_to_next_stop(lines, stop, current_stop):
+    if lines > 2:
+        return False
+
+    return lines < 2 or stop.line == current_stop.line
+
 
 def take_possible_paths(trip, poss_moves, end_station):
     for i, move in enumerate(poss_moves):
@@ -73,15 +81,19 @@ def take_possible_paths(trip, poss_moves, end_station):
         end_eq = stop_matches_current(move.end_stop, trip.current_stop)
 
         # also, we can only take two lines; enforce that here
-        can_use_end_line = (
-            trip.lines < 2 or move.end_stop.line == trip.current_stop.line
+        end_line_ok = can_move_to_next_stop(
+            trip.lines,
+            move.end_stop,
+            trip.current_stop
         )
-        can_use_start_line = (
-            trip.lines < 2 or move.start_stop.line == trip.current_stop.line
+        start_line_ok = can_move_to_next_stop(
+            trip.lines,
+            move.start_stop,
+            trip.current_stop
         )
 
-        if (start_eq and can_use_end_line) or (end_eq and can_use_start_line):
-            new_trip = copy(trip)
+        if (start_eq and end_line_ok) or (end_eq and start_line_ok):
+            new_trip = deepcopy(trip)
             new_poss_moves = poss_moves.copy()
 
             new_trip.take_move(new_poss_moves.pop(i))
